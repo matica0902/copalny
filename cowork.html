@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 互動式程序流程畫布</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            touch-action: none; /* 禁用觸控的預設行為，如頁面滾動 */
+        }
+        #text-editor {
+            position: absolute; display: none; padding: 10px; border: 2px solid #3b82f6;
+            border-radius: 8px; font-size: 16px; background-color: #f0f9ff;
+            outline: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); z-index: 100;
+            min-width: 200px; min-height: 40px; resize: both;
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        }
+        canvas {
+            cursor: grab; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        canvas:active { cursor: grabbing; }
+        
+        /* --- Gemini API 功能相關樣式 --- */
+        .loader {
+            width: 24px; height: 24px; border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6; border-radius: 50%;
+            animation: spin 1s linear infinite; display: none; /* 初始隱藏 */
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #explanation-modal {
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex flex-col items-center justify-center min-h-screen p-4 space-y-4">
+
+    <div class="w-full max-w-6xl text-center">
+        <h1 class="text-3xl font-bold text-slate-800">✨ AI 互動式程序流程畫布</h1>
+        <p class="text-slate-600 mt-2">
+            操作提示：<span class="font-semibold">點擊</span>方塊可選取，<span class="font-semibold">拖曳</span>來移動，<span class="font-semibold">雙擊</span>來編輯。
+        </p>
+    </div>
+
+    <!-- Gemini API 功能區 -->
+    <div class="w-full max-w-6xl p-4 bg-white rounded-lg shadow-md">
+        <div class="flex flex-col lg:flex-row items-center gap-4 mb-4">
+            <div class="flex-grow w-full">
+                <label for="goal-input" class="block text-sm font-medium text-slate-700 mb-1">輸入您的目標：</label>
+                <input type="text" id="goal-input" placeholder="例如：開發一個新的待辦事項應用程式" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <button id="generate-steps-btn" class="w-full lg:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                <div id="generate-loader" class="loader"></div>
+                <span>✨ 生成流程步驟</span>
+            </button>
+        </div>
+        
+        <div class="flex flex-wrap gap-2">
+            <div id="ai-controls" class="hidden">
+                <button id="explain-step-btn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                    <div id="explain-loader" class="loader"></div>
+                    <span>✨ 解釋此步驟</span>
+                </button>
+            </div>
+            <button id="add-step-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                ➕ 手動新增步驟
+            </button>
+            <button id="toggle-layout-btn" class="bg-purple-600 text-white font-bold py-2 px-4 rounded-md hover:bg-purple-700 transition-colors">
+                🌳 切換樹狀圖
+            </button>
+        </div>
+    </div>
+
+    <!-- 畫布容器 -->
+    <div id="canvas-container" class="w-full bg-white rounded-lg shadow-lg relative" style="min-height: 600px; max-height: 80vh; overflow: auto; border: 1px solid #e2e8f0;">
+        <canvas id="interactiveCanvas" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1;"></canvas>
+    </div>
+
+    <!-- 文字編輯器 -->
+    <textarea id="text-editor" placeholder="編輯內容..."></textarea>
+    
+    <!-- 解釋彈出視窗 -->
+    <div id="explanation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 opacity-0 pointer-events-none z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800">✨ AI 步驟詳解</h3>
+                <button id="close-modal-btn" class="text-slate-500 hover:text-slate-800">&times;</button>
+            </div>
+            <div id="explanation-content" class="p-6 overflow-y-auto">
+                <p>正在向 Gemini 請求解釋...</p>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM 元素獲取 ---
+            const canvasContainer = document.getElementById('canvas-container');
+            const canvas = document.getElementById('interactiveCanvas');
+            const ctx = canvas.getContext('2d');
+            const textEditor = document.getElementById('text-editor');
+            const goalInput = document.getElementById('goal-input');
+            const generateBtn = document.getElementById('generate-steps-btn');
+            const explainBtn = document.getElementById('explain-step-btn');
+            const addStepBtn = document.getElementById('add-step-btn');
+            const toggleLayoutBtn = document.getElementById('toggle-layout-btn');
+            const aiControls = document.getElementById('ai-controls');
+            const generateLoader = document.getElementById('generate-loader');
+            const explainLoader = document.getElementById('explain-loader');
+            const modal = document.getElementById('explanation-modal');
+            const modalContent = document.getElementById('explanation-content');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+
+            // --- 狀態變數 ---
+            let items = [];
+            let draggingItem = null;
+            let selectedItem = null;
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+            let currentTexts = [];
+            let isInitialState = true; // 新增：用於判斷是否為初始狀態
+            let isTreeLayout = false; // 新增：樹狀圖模式
+            const apiKey = prompt("請輸入您的 Gemini API Key:"); // 動態獲取 API Key
+
+            // --- 初始化函式 ---
+            function init() {
+                currentTexts = ["點擊上方按鈕，讓 AI 為您生成流程圖！"];
+                isInitialState = true;
+                resizeCanvas(); 
+                addEventListeners();
+            }
+            
+            // --- Gemini API 呼叫核心函式 ---
+            async function callGeminiAPI(prompt, isJson = false, retries = 3, delay = 1000) {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                };
+
+                if (isJson) {
+                    payload.generationConfig = {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                steps: { type: "ARRAY", items: { type: "STRING" } }
+                            }
+                        }
+                    };
+                }
+
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP 錯誤! 狀態: ${response.status}`);
+                        }
+
+                        const result = await response.json();
+                        
+                        if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                            const text = result.candidates[0].content.parts[0].text;
+                            return text;
+                        } else {
+                            throw new Error("從 API 收到了無效的回應格式。");
+                        }
+                    } catch (error) {
+                        console.error(`API 呼叫失敗 (嘗試 ${i + 1}/${retries}):`, error);
+                        if (i === retries - 1) {
+                            return null; // 所有重試均失敗
+                        }
+                        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i))); // Exponential backoff
+                    }
+                }
+            }
+            
+            // --- 功能：生成步驟 ---
+            async function handleGenerateSteps() {
+                const goal = goalInput.value.trim();
+                if (!goal) {
+                    alert("請先輸入您的目標！");
+                    return;
+                }
+                
+                setLoadingState(generateBtn, generateLoader, true);
+                const prompt = `作為一名專業的專案經理，請將以下任務分解為清晰、可執行的步驟列表。任務是：「${goal}」。請只返回一個包含 'steps' 鍵的 JSON 物件，其值為一個字串陣列。`;
+                
+                const resultText = await callGeminiAPI(prompt, true);
+                if (resultText) {
+                    try {
+                        const parsedResult = JSON.parse(resultText);
+                        if (parsedResult.steps && Array.isArray(parsedResult.steps)) {
+                            isInitialState = false; // **修正：更新狀態**
+                            currentTexts = parsedResult.steps; 
+                            createItems(currentTexts);
+                        } else {
+                            throw new Error("解析後的回應中缺少 'steps' 陣列。");
+                        }
+                    } catch (e) {
+                        console.error("解析 JSON 失敗:", e);
+                        alert("AI 回應的格式有誤，請稍後再試。");
+                    }
+                } else {
+                    alert("無法從 AI 獲取步驟，請檢查您的網路或稍後再試。");
+                }
+                setLoadingState(generateBtn, generateLoader, false);
+            }
+
+            // --- 功能：解釋步驟 ---
+            async function handleExplainStep() {
+                if (!selectedItem) return;
+                
+                setLoadingState(explainBtn, explainLoader, true);
+                showModal("正在向 Gemini 請求解釋...");
+
+                const prompt = `作為一名資深技術導師，請用簡潔易懂的語言解釋以下軟體開發或專案管理中的步驟。解釋應包含「這是什麼」以及「為什麼它很重要」。步驟是：「${selectedItem.text}」。`;
+                
+                const explanation = await callGeminiAPI(prompt);
+                showModal(explanation || "抱歉，無法獲取解釋。請稍後再試。");
+                setLoadingState(explainBtn, explainLoader, false);
+            }
+
+            // --- 功能：手動新增步驟 ---
+            function handleAddStep() {
+                const newText = prompt("請輸入新的步驟內容：");
+                if (newText && newText.trim()) {
+                    isInitialState = false;
+                    currentTexts.push(newText.trim());
+                    createItems(currentTexts);
+                }
+            }
+
+            // --- 功能：切換佈局模式 ---
+            function handleToggleLayout() {
+                isTreeLayout = !isTreeLayout;
+                toggleLayoutBtn.textContent = isTreeLayout ? '📋 切換列表圖' : '🌳 切換樹狀圖';
+                createItems(currentTexts);
+            }
+
+            // --- 畫布相關函式 ---
+            function resizeCanvas() {
+                // 當視窗大小改變時，總是重新計算佈局
+                if (currentTexts.length > 0) {
+                    createItems(currentTexts);
+                } else {
+                    canvas.width = Math.max(canvasContainer.clientWidth - 40, 800); // 最小寬度 800px
+                    canvas.height = 600; // 增加初始高度
+                    canvasContainer.style.height = '600px';
+                    draw();
+                }
+            }
+
+            function createItems(texts) {
+                // **修正：總是在佈局前更新畫布寬度，確保最小寬度**
+                canvas.width = Math.max(canvasContainer.clientWidth - 40, 800);
+                ctx.font = '16px Inter';
+
+                if (isInitialState && texts.length === 1) {
+                    // 初始訊息的置中邏輯
+                    const text = texts[0];
+                    const textMetrics = ctx.measureText(text);
+                    const itemWidth = textMetrics.width + 40;
+                    const itemHeight = 50;
+                    
+                    // **修正：給初始畫布一個更大的高度**
+                    canvas.height = 600; 
+                    canvasContainer.style.height = `${canvas.height}px`;
+
+                    let x = (canvas.width - itemWidth) / 2;
+                    let y = (canvas.height / 2) - (itemHeight / 2);
+                    
+                    items = [{
+                        id: Date.now(), text, x, y, width: itemWidth, height: itemHeight, isDragging: false
+                    }];
+
+                } else if (isTreeLayout) {
+                    // 樹狀圖佈局邏輯
+                    createTreeLayout(texts);
+                } else {
+                    // 垂直排列佈局邏輯（每個項目佔一行）
+                    createVerticalLayout(texts);
+                }
+
+                selectedItem = null;
+                updateAIControls();
+                draw();
+            }
+
+            function createVerticalLayout(texts) {
+                const PADDING = 20;
+                const GAP_Y = 20;
+                const ITEM_HEIGHT = 60;
+                const ITEM_WIDTH = Math.max(canvas.width - (PADDING * 2), 400);
+
+                let currentY = PADDING;
+
+                items = texts.map((text, index) => {
+                    const lines = text.split('\n');
+                    const actualHeight = Math.max(ITEM_HEIGHT, lines.length * 20 + 20);
+
+                    const item = {
+                        id: Date.now() + index,
+                        text: text,
+                        x: PADDING,
+                        y: currentY,
+                        width: ITEM_WIDTH,
+                        height: actualHeight,
+                        isDragging: false
+                    };
+                    
+                    currentY += actualHeight + GAP_Y;
+                    return item;
+                });
+
+                const requiredHeight = currentY + PADDING;
+                canvas.height = Math.max(requiredHeight, 600);
+                canvasContainer.style.height = `${canvas.height}px`;
+            }
+
+            function createTreeLayout(texts) {
+                const PADDING = 50;
+                const NODE_WIDTH = 180;
+                const NODE_HEIGHT = 60;
+                const HORIZONTAL_GAP = 50;
+                const VERTICAL_GAP = 100;
+
+                // 建立更清晰的樹狀結構
+                const treeNodes = [];
+                
+                // 第一層：根節點
+                if (texts.length > 0) {
+                    treeNodes.push({
+                        text: texts[0],
+                        level: 0,
+                        position: 0,
+                        parent: null,
+                        children: []
+                    });
+                }
+
+                // 第二層：主要分支
+                if (texts.length > 1) {
+                    const midPoint = Math.ceil((texts.length - 1) / 2);
+                    
+                    // 左分支
+                    for (let i = 1; i <= midPoint && i < texts.length; i++) {
+                        treeNodes.push({
+                            text: texts[i],
+                            level: 1,
+                            position: i - 1,
+                            parent: 0,
+                            children: []
+                        });
+                    }
+                    
+                    // 右分支
+                    for (let i = midPoint + 1; i < texts.length; i++) {
+                        treeNodes.push({
+                            text: texts[i],
+                            level: 2,
+                            position: i - midPoint - 1,
+                            parent: 0,
+                            children: []
+                        });
+                    }
+                }
+
+                // 計算畫布大小
+                const maxLevel = Math.max(...treeNodes.map(node => node.level));
+                const maxNodesInLevel = Math.max(...Array.from({length: maxLevel + 1}, (_, level) => 
+                    treeNodes.filter(node => node.level === level).length
+                ));
+                
+                const canvasWidth = Math.max(canvas.width, (maxNodesInLevel * NODE_WIDTH) + ((maxNodesInLevel - 1) * HORIZONTAL_GAP) + (PADDING * 2));
+                const canvasHeight = Math.max(600, ((maxLevel + 1) * NODE_HEIGHT) + (maxLevel * VERTICAL_GAP) + (PADDING * 2));
+                
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                canvasContainer.style.height = `${canvasHeight}px`;
+
+                // 計算每個節點的位置
+                items = treeNodes.map((node, index) => {
+                    const nodesInSameLevel = treeNodes.filter(n => n.level === node.level);
+                    const levelWidth = (nodesInSameLevel.length - 1) * (NODE_WIDTH + HORIZONTAL_GAP);
+                    const levelStartX = (canvas.width - levelWidth) / 2;
+                    
+                    const x = levelStartX + (node.position * (NODE_WIDTH + HORIZONTAL_GAP));
+                    const y = PADDING + (node.level * (NODE_HEIGHT + VERTICAL_GAP));
+
+                    return {
+                        id: Date.now() + index,
+                        text: node.text,
+                        x: x,
+                        y: y,
+                        width: NODE_WIDTH,
+                        height: NODE_HEIGHT,
+                        isDragging: false,
+                        level: node.level,
+                        position: node.position,
+                        parentIndex: node.parent,
+                        nodeIndex: index
+                    };
+                });
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 如果是樹狀圖，先繪製連接線
+                if (isTreeLayout) {
+                    drawTreeConnections();
+                }
+
+                items.forEach(item => {
+                    ctx.save();
+                    if (item.id === selectedItem?.id) { // 繪製選取狀態
+                        ctx.fillStyle = '#e0e7ff';
+                        ctx.strokeStyle = '#4f46e5';
+                        ctx.shadowColor = 'rgba(79, 70, 229, 0.4)';
+                        ctx.shadowBlur = 12;
+                    } else if (item.isDragging) { // 繪製拖曳狀態
+                        ctx.fillStyle = '#dbeafe';
+                        ctx.strokeStyle = '#3b82f6';
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                        ctx.shadowBlur = 10;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 4;
+                    } else {
+                        ctx.fillStyle = isTreeLayout ? '#fef3c7' : '#f1f5f9'; // 樹狀圖用黃色背景
+                        ctx.strokeStyle = isTreeLayout ? '#f59e0b' : '#cbd5e1'; // 樹狀圖用橙色邊框
+                    }
+                    
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(item.x, item.y, item.width, item.height, 8);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+
+                    ctx.fillStyle = '#1e293b';
+                    ctx.font = isTreeLayout ? '14px Inter' : '16px Inter'; // 樹狀圖用較小字體
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // 樹狀圖顯示節點編號
+                    if (isTreeLayout) {
+                        // 顯示節點編號
+                        ctx.fillStyle = '#6b7280';
+                        ctx.font = '12px Inter';
+                        ctx.fillText(`${item.nodeIndex + 1}`, item.x + item.width / 2, item.y - 5);
+                        
+                        // 顯示節點內容
+                        ctx.fillStyle = '#1e293b';
+                        ctx.font = '14px Inter';
+                        const maxLength = 20;
+                        const displayText = item.text.length > maxLength ? item.text.substring(0, maxLength) + '...' : item.text;
+                        ctx.fillText(displayText, item.x + item.width / 2, item.y + item.height / 2);
+                    } else {
+                        // 列表圖顯示完整內容
+                        const lines = item.text.split('\n');
+                        const lineHeight = 20;
+                        const startY = item.y + item.height / 2 - (lines.length - 1) * lineHeight / 2;
+                        
+                        lines.forEach((line, index) => {
+                            const maxLength = 50;
+                            const displayText = line.length > maxLength ? line.substring(0, maxLength) + '...' : line;
+                            ctx.fillText(displayText, item.x + item.width / 2, startY + index * lineHeight);
+                        });
+                    }
+                });
+            }
+
+            function drawTreeConnections() {
+                ctx.strokeStyle = '#6b7280';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+
+                items.forEach((item, index) => {
+                    if (item.parentIndex !== null && item.parentIndex !== undefined) {
+                        const parent = items.find(i => i.nodeIndex === item.parentIndex);
+                        if (parent) {
+                            const parentX = parent.x + parent.width / 2;
+                            const parentY = parent.y + parent.height;
+                            const childX = item.x + item.width / 2;
+                            const childY = item.y;
+
+                            ctx.beginPath();
+                            ctx.moveTo(parentX, parentY);
+                            ctx.lineTo(parentX, parentY + (childY - parentY) / 2);
+                            ctx.lineTo(childX, parentY + (childY - parentY) / 2);
+                            ctx.lineTo(childX, childY);
+                            ctx.stroke();
+                        }
+                    }
+                });
+
+                ctx.setLineDash([]);
+            }
+
+            function isMouseOverItem(x, y, item) {
+                return x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height;
+            }
+            
+            // --- 事件處理 ---
+            function handleMouseDown(e) {
+                e.preventDefault();
+                const { x, y } = getMousePos(e);
+                let clickedOnItem = false;
+
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const item = items[i];
+                    if (isMouseOverItem(x, y, item)) {
+                        clickedOnItem = true;
+                        selectedItem = item;
+                        draggingItem = item;
+                        item.isDragging = true;
+                        dragOffsetX = x - item.x;
+                        dragOffsetY = y - item.y;
+                        
+                        items.splice(i, 1);
+                        items.push(item);
+                        break;
+                    }
+                }
+                
+                if (!clickedOnItem) {
+                    selectedItem = null;
+                }
+                
+                updateAIControls();
+                draw();
+            }
+
+            function handleMouseMove(e) {
+                if (!draggingItem) return;
+                e.preventDefault();
+                const { x, y } = getMousePos(e);
+                draggingItem.x = x - dragOffsetX;
+                draggingItem.y = y - dragOffsetY;
+                draw();
+            }
+
+            function handleMouseUp(e) {
+                if (draggingItem) {
+                    draggingItem.isDragging = false;
+                    draggingItem = null;
+                    draw();
+                }
+            }
+            
+            function handleDoubleClick(e) {
+                const { x, y } = getMousePos(e);
+                const clickedItem = items.find(item => isMouseOverItem(x, y, item));
+                if (clickedItem) showTextEditor(clickedItem);
+            }
+            
+            // --- UI 輔助函式 ---
+            function showTextEditor(item) {
+                const canvasRect = canvas.getBoundingClientRect();
+                textEditor.style.display = 'block';
+                textEditor.style.left = `${canvasRect.left + item.x}px`;
+                textEditor.style.top = `${canvasRect.top + item.y}px`;
+                textEditor.style.width = `${Math.max(item.width, 200)}px`;
+                textEditor.style.height = `${Math.max(item.height, 40)}px`;
+                textEditor.value = item.text;
+                textEditor.focus();
+                textEditor.select(); // 選取所有文字
+                canvas.style.pointerEvents = 'none';
+                
+                const onFinishEditing = () => {
+                    const newText = textEditor.value.trim();
+                    if (newText) {
+                        item.text = newText;
+                        // 重新計算高度，支援多行文字
+                        const lines = newText.split('\n');
+                        const actualHeight = Math.max(60, lines.length * 20 + 20);
+                        item.height = actualHeight;
+                        
+                        // 重新佈局所有項目
+                        createItems(currentTexts);
+                        return; // 提前返回，因為 createItems 會重新繪製
+                    }
+                    textEditor.style.display = 'none';
+                    canvas.style.pointerEvents = 'auto';
+                    draw();
+                    textEditor.removeEventListener('blur', onFinishEditing);
+                    textEditor.removeEventListener('keydown', onKeyDown);
+                };
+                
+                const onKeyDown = (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        onFinishEditing();
+                    } else if (event.key === 'Escape') {
+                        textEditor.value = item.text;
+                        onFinishEditing();
+                    }
+                };
+                
+                textEditor.addEventListener('blur', onFinishEditing);
+                textEditor.addEventListener('keydown', onKeyDown);
+            }
+            
+            function updateAIControls() {
+                aiControls.style.display = selectedItem ? 'block' : 'none';
+            }
+
+            function setLoadingState(button, loader, isLoading) {
+                button.disabled = isLoading;
+                loader.style.display = isLoading ? 'inline-block' : 'none';
+                button.style.cursor = isLoading ? 'not-allowed' : 'pointer';
+            }
+            
+            function showModal(content) {
+                modalContent.innerHTML = content.replace(/\n/g, '<br>'); // 簡單處理換行
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+            }
+
+            function hideModal() {
+                modal.classList.add('opacity-0', 'pointer-events-none');
+            }
+            
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                const event = e.touches ? e.touches[0] : e;
+                return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+            }
+
+            function addEventListeners() {
+                canvas.addEventListener('mousedown', handleMouseDown);
+                canvas.addEventListener('mousemove', handleMouseMove);
+                canvas.addEventListener('mouseup', handleMouseUp);
+                canvas.addEventListener('mouseout', handleMouseUp);
+
+                canvas.addEventListener('dblclick', handleDoubleClick);
+
+                canvas.addEventListener('touchstart', handleMouseDown);
+                canvas.addEventListener('touchmove', handleMouseMove);
+                canvas.addEventListener('touchend', handleMouseUp);
+                
+                window.addEventListener('resize', resizeCanvas);
+
+                generateBtn.addEventListener('click', handleGenerateSteps);
+                explainBtn.addEventListener('click', handleExplainStep);
+                addStepBtn.addEventListener('click', handleAddStep);
+                toggleLayoutBtn.addEventListener('click', handleToggleLayout);
+                closeModalBtn.addEventListener('click', hideModal);
+                modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+            }
+
+            init();
+        });
+    </script>
+
+</body>
+</html>
+
+
