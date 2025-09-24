@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - '*'  # 為所有標籤創建 release
 
 jobs:
   release:
