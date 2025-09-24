@@ -6,9 +6,38 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg)
 
-## ✨ 功能特色
+## 🚀 快速開始
 
-### 🤖 AI 智能生成
+### ⚡ 新用戶請先閱讀：[QUICK_START.md](QUICK_START.md)
+**重要**: 如果您是第一次使用或遇到任何問題，請先查看快速入門指南。
+
+### 自動化啟動 (推薦)
+```bash
+cd /Users/jianjunneng/0923TEST/copalny
+./start_server.sh
+```
+然後在瀏覽器中訪問：`http://localhost:8000/cowork.html`
+
+### 詳細說明
+📖 請參考 [啟動指南](STARTUP_GUIDE.md) 獲取完整的安裝和故障排除說明。
+
+## 📚 文檔導航
+
+| 文檔 | 優先級 | 適用場景 | 內容概要 |
+|------|--------|----------|----------|
+| **[QUICK_START.md](QUICK_START.md)** | ⭐⭐⭐⭐⭐ **最高優先** | 新用戶、問題排除 | 快速入門 + 問題導航 |
+| **[start_server.sh](start_server.sh)** | ⭐⭐⭐⭐⭐ **最高優先** | 實際啟動 | 一鍵啟動腳本 |
+| **[STARTUP_GUIDE.md](STARTUP_GUIDE.md)** | ⭐⭐⭐⭐ | 啟動問題、故障排除 | 完整啟動流程 + 疑難雜症 |
+| **[AI_PROMPT_GUIDE.md](AI_PROMPT_GUIDE.md)** | ⭐⭐⭐ | AI 功能實現 | 提示詞設計 + 回應處理流程 |
+| **[README.md](README.md)** | ⭐⭐⭐ | 功能了解、開發者 | 項目介紹 + 功能說明 |
+| **[API_SETUP_GUIDE.md](API_SETUP_GUIDE.md)** | ⭐⭐ | AI功能配置 | Gemini API 設置指南 |
+
+### 📖 閱讀建議
+- **🚀 新手用戶**：先讀 QUICK_START.md，有問題再看 STARTUP_GUIDE.md
+- **🔧 開發者**：先讀 README.md，再看 API_SETUP_GUIDE.md
+- **❓ 問題排除**：直接看 STARTUP_GUIDE.md 的故障排除部分
+
+## ✨ 功能特色
 - **Gemini API 整合**：使用 Google Gemini AI 自動生成專案流程步驟
 - **智能分析**：AI 會根據您的目標自動分解為可執行的步驟
 - **詳細解釋**：點擊任何步驟可獲得 AI 的詳細解釋
