@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          ## What's Changed
+
+          This is an automated release for version ${{ github.ref_name }}.
+
+          ### Files Included:
+          - `cowork.html` - Main application
+          - `start_server.sh` - Server startup script
+          - Documentation files (README.md, QUICK_START.md, etc.)
+
+          ### How to Use:
+          1. Download the latest release
+          2. Run `./start_server.sh` to start the local server
+          3. Open http://localhost:8000/cowork.html in your browser
+
+          For detailed instructions, see the documentation files included.
+        draft: false
+        prerelease: false

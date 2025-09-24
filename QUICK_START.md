@@ -26,6 +26,7 @@
 |------|------|----------|
 | **[STARTUP_GUIDE.md](STARTUP_GUIDE.md)** | 🔧 完整的啟動和故障排除指南 | 遇到啟動問題時使用 |
 | **[AI_PROMPT_GUIDE.md](AI_PROMPT_GUIDE.md)** | 🤖 AI 提示詞與回應處理說明 | 了解 AI 功能實現 |
+| **[GITHUB_RELEASE_GUIDE.md](GITHUB_RELEASE_GUIDE.md)** | 🚀 GitHub 發佈指南 | 想要發佈到GitHub時使用 |
 | **[README.md](README.md)** | 📖 項目功能和特性說明 | 了解應用功能 |
 | **[API_SETUP_GUIDE.md](API_SETUP_GUIDE.md)** | 🔑 Google Gemini API 配置 | 需要設置AI功能 |
 
