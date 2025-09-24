@@ -43,19 +43,30 @@ cd /Users/jianjunneng/0923TEST/copalny
 
 **GitHub 主頁面的 "Code" 按鈕會下載最新開發版本**，可能包含未測試的功能。
 
-**要下載穩定版本，請使用 Releases 頁面：**
+**要下載穩定版本，請使用以下方法之一：**
 
+### 🎯 方法1：Release 頁面下載 (推薦新手)
 1. 點擊上方 **"Releases"** 標籤
-2. 選擇您想要的版本：
-   - **v1.0.1** (最新穩定版) - 包含 CI/CD 自動化
-   - **v1.0.0** (基礎版本) - 核心 AI 功能
+2. 選擇您想要的版本
 3. 在 **"Assets"** 區塊下載 `Source code (zip)` 或 `Source code (tar.gz)`
 
-### 📊 版本差異
+### � 方法2：Git Clone (適合開發者)
+```bash
+# 下載最新穩定版 (v1.0.2)
+git clone https://github.com/matica0902/copalny.git
+cd copalny
+git checkout v1.0.2
+
+# 或直接下載特定版本
+git clone --branch v1.0.2 https://github.com/matica0902/copalny.git
+```
+
+### �📊 版本差異
 
 | 版本 | 檔案數量 | 主要特色 | 適用場景 |
 |------|----------|----------|----------|
-| **v1.0.1** ⭐ 推薦 | 13 個檔案 | CI/CD 自動化 + 完整文檔 | 新用戶、完整體驗 |
+| **v1.0.2** ⭐ 推薦 | 13 個檔案 | 文檔完善 + CI/CD | 新用戶、完整體驗 |
+| **v1.0.1** | 13 個檔案 | CI/CD 自動化 | 穩定版本 |
 | **v1.0.0** | 11 個檔案 | 核心 AI 功能 | 輕量使用、客製化 |
 
 ## ✨ 功能特色
